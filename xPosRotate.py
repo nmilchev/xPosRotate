@@ -1,11 +1,15 @@
 from phBot import *
 from threading import Timer
 import QtBind
+import urllib.request
+import re
 import os
+import shutil
 import time
 
-pName = "PosRotate"
-pVersion = "1.3.8"
+pName = 'PosRotate'
+pVersion = '1.4.0'
+pUrl = 'https://raw.githubusercontent.com/nmilchev/xPosRotate/refs/heads/main/xPosRotate.py'
 
 gui = QtBind.init(__name__, pName)
 
@@ -56,6 +60,7 @@ QtBind.createLabel(gui, "🎯 Training Rotation", 10, 150)
 spot1 = QtBind.createCheckBox(gui, "cb_1_clicked", "🔴 Inactive", 25, 175)
 spot2 = QtBind.createCheckBox(gui, "cb_2_clicked", "🔴 Inactive", 25, 195)
 spot3 = QtBind.createCheckBox(gui, "cb_3_clicked", "🔴 Inactive", 25, 215)
+QtBind.createCheckBox(gui, "cbEnable_clicked", "Enabled", 325, 245)
 
 QtBind.createLabel(gui, "──────────────────────────────", 5, 240)
 
@@ -70,13 +75,23 @@ btnRes = QtBind.createButton(gui, "btn_force_reset", "⏳ RESET ⏳", 150, 280)
 
 QtBind.createLabel(gui, "══════════════════════════════", 5, 310)
 
+# ===== UPDATE =====
+btnUpdate = QtBind.createButton(gui, "btn_update", "🔄 UPDATE 🔄", 635, 5)
+
 # Checkbox map
 checkbox_map = {
     "cb_1": (spot1, "Location 1"),
     "cb_2": (spot2, "Location 2"),
     "cb_3": (spot3, "Location 3"),
 }
+def cbEnable_clicked(checked):
+    global ENABLED
+    ENABLED = checked
 
+    if ENABLED:
+        log('FGW/HoW Automation ENABLED')
+    else:
+        log('FGW/HoW Automation DISABLED')
 
 start = "walk,6428,1108,0"
 SCRIPT = """use,FGW - Hall of Warship
@@ -380,6 +395,65 @@ def getPath():
 # Helpers
 # -------------------------
 
+def get_latest_version(url):
+    try:
+        req = urllib.request.Request(url, headers={
+            'User-Agent': "Mozilla/5.0"
+        })
+        with urllib.request.urlopen(req) as w:
+            pyCode = str(w.read().decode("utf-8"))
+            if re.search("\npVersion = [0-9.'\"]*", pyCode):
+                return re.search("\npVersion = ([0-9a-zA-Z.'\"]*)", pyCode).group(0)[13:-1], pyCode
+    except:
+        pass
+    return None, None
+
+
+def compare_version(a, b):
+    a = tuple(map(int, a.split(".")))
+    b = tuple(map(int, b.split(".")))
+    return a < b
+
+
+def btn_update():
+    global pVersion, pUrl
+
+    if not pUrl:
+        log("❌ No update URL defined.")
+        return
+
+    log("🔎 Checking for updates...")
+
+    latest_version, new_code = get_latest_version(pUrl)
+
+    if not latest_version:
+        log("❌ Could not check version.")
+        return
+
+    if not compare_version(pVersion, latest_version):
+        log("✔ Plugin already up to date.")
+        return
+
+    try:
+        current_file = os.path.realpath(__file__)
+        backup_file = current_file + ".bkp"
+
+        # Create backup
+        shutil.copyfile(current_file, backup_file)
+
+        # Overwrite current plugin
+        with open(current_file, "w", encoding="utf-8") as f:
+            f.write(new_code)
+
+        log(f"✅ Updated successfully to v{latest_version}")
+        log("♻ Please reload the plugin.")
+
+    except Exception as e:
+        log("❌ Update failed:")
+        log(str(e))
+
+
+
 def format_time(seconds):
     seconds = int(seconds)
     hours = seconds // 3600
@@ -581,7 +655,9 @@ def save_selected():
 # -------------------------
 def event_loop():
     global timer_running, current_rotation_index
-
+    
+    if not ENABLED:
+        return
     if not timer_running:
         return 1000
 
