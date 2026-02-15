@@ -5,7 +5,7 @@ import os
 import time
 
 pName = "PosRotate"
-pVersion = "1.3.7"
+pVersion = "1.3.8"
 
 gui = QtBind.init(__name__, pName)
 
