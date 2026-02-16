@@ -17,7 +17,7 @@ gui = QtBind.init(__name__, pName)
 # -------------------------
 # Globals
 # -------------------------
-TIMER_DURATION = 60  # 1 hour
+TIMER_DURATION = 3600  # 1 hour
 
 ENABLED = False
 timer_start_time = 0
