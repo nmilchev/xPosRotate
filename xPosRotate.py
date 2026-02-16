@@ -8,7 +8,7 @@ import shutil
 import time
 
 pName = 'PosRotate'
-pVersion = '1.4.0'
+pVersion = '1.7.0'
 pUrl = 'https://raw.githubusercontent.com/nmilchev/xPosRotate/refs/heads/main/xPosRotate.py'
 
 gui = QtBind.init(__name__, pName)
@@ -17,11 +17,12 @@ gui = QtBind.init(__name__, pName)
 # -------------------------
 # Globals
 # -------------------------
-TIMER_DURATION = 3600  # 1 hour
+TIMER_DURATION = 60  # 1 hour
 
 ENABLED = False
 timer_start_time = 0
 timer_running = False
+paused = False
 
 # Rotation System
 active_location = None
@@ -70,8 +71,9 @@ QtBind.createLabel(gui, "📊 Status Panel", 10, 255)
 lblStatus = QtBind.createLabel(gui, "Mode: Idle", 25, 280)
 lblTime = QtBind.createLabel(gui, "Remaining: 00:00:00", 25, 300)
 btnStart = QtBind.createButton(gui, "btn_start_rotation", "✅ START", 150, 150)
-#btnStop  = QtBind.createButton(gui, "btn_stop_rotation", "⛔ STOP", 450, 105)
+btnStop = QtBind.createButton(gui, "btn_stop_rotation", "⛔ STOP", 150, 180)
 btnRes = QtBind.createButton(gui, "btn_force_reset", "⏳ RESET ⏳", 150, 280)
+btnPause = QtBind.createButton(gui, "btn_pause_rotation", "⏸ PAUSE", 150, 210)
 
 QtBind.createLabel(gui, "══════════════════════════════", 5, 310)
 
@@ -452,7 +454,37 @@ def btn_update():
         log("❌ Update failed:")
         log(str(e))
 
+def btn_pause_rotation():
+    global paused
 
+    if not timer_running:
+        log("⚠ We didn't even started ...  🤔 Nothing is running.")
+        return
+
+    paused = not paused
+
+    if paused:
+        stop_bot()
+        QtBind.setText(gui, lblStatus, "Mode: Paused")
+        log("⏸ Rotation paused.")
+    else:
+        QtBind.setText(gui, lblStatus, "Mode: Rotation Active")
+        log("▶ Rotation resumed.")
+
+        # If timer already expired while paused
+        if get_remaining() <= 0:
+            log("⏳ Time was over during pause. Continuing rotation...")
+            rebuild_rotation_list()
+
+            if not rotation_order:
+                return
+
+            global current_rotation_index
+            current_rotation_index += 1
+            if current_rotation_index >= len(rotation_order):
+                current_rotation_index = 0
+
+            start_training(rotation_order[current_rotation_index])
 
 def format_time(seconds):
     seconds = int(seconds)
@@ -502,8 +534,9 @@ def rebuild_rotation_list():
 
 
 def btn_start_rotation():
-    global timer_running, timer_start_time, current_rotation_index
+    global timer_running, timer_start_time, current_rotation_index, ENABLED
 
+    ENABLED = True
     rebuild_rotation_list()
 
     if not rotation_order:
@@ -516,8 +549,8 @@ def btn_start_rotation():
         return
 
     current_rotation_index = 0
-    timer_start_time = time.time()
-    timer_running = True
+    #timer_start_time = time.time()
+    #timer_running = True
 
     start_training(rotation_order[current_rotation_index])
 
@@ -525,19 +558,25 @@ def btn_start_rotation():
     log("▶ Rotation started.")
 
 def btn_stop_rotation():
-    global timer_running
+    global timer_running, timer_start_time, current_rotation_index, ENABLED, paused
 
-    if not timer_running:
-        log("⚠ Rotation already stopped.")
-        return
-#This function is disabled !!!!!
-   # timer_running = False
-   # stop_bot()
+    paused = False
+    ENABLED = False
+    # Stop timer
+    timer_running = False
+    timer_start_time = 0
 
+    # Reset rotation index
+    current_rotation_index = 0
+
+    # Stop bot completely
+    stop_bot()
+
+    # UI Reset
     QtBind.setText(gui, lblStatus, "Mode: Stopped")
     QtBind.setText(gui, lblTime, "Remaining: 00:00:00")
 
-    log("⏹ Rotation stopped.")
+    log("⛔ FULL STOP executed. All timers and rotations stopped.")
 
 def btn_force_reset():
     global timer_running, timer_start_time, current_rotation_index
@@ -612,7 +651,7 @@ def btn_start_clicked():
 
     if timer_running:
         log("Timer already running. Not resetting.")
-        return 1000
+        return
 
     timer_start_time = time.time()
     timer_running = True
@@ -657,14 +696,18 @@ def event_loop():
     global timer_running, current_rotation_index
     
     if not ENABLED:
-        return
+        return 
     if not timer_running:
-        return 1000
+        return 
 
     remaining = get_remaining()
     QtBind.setText(gui, lblTime, f"Remaining: {format_time(remaining)}")
 
     if remaining <= 0:
+        # If paused → do nothing, wait for unpause
+        if paused:
+            QtBind.setText(gui, lblStatus, "Mode: Paused (Time Over)")
+            return
         log("⏳ Timer finished. Switching location.")
         timer_running = False
 
@@ -672,7 +715,7 @@ def event_loop():
 
         if not rotation_order:
             log("❌ No active locations.")
-            return 1000
+            return 
 
         current_rotation_index += 1
         if current_rotation_index >= len(rotation_order):
@@ -681,7 +724,7 @@ def event_loop():
         next_location = rotation_order[current_rotation_index]
         start_training(next_location)
 
-    return 1000
+    return 
 
 
 # ------------------------
@@ -689,7 +732,7 @@ def event_loop():
 # ------------------------
 def get_hole(a):
     btn_start_clicked()
-    return 1000
+    return
 
 
 # Plugin loaded
