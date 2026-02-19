@@ -1,6 +1,8 @@
 from phBot import *
 from threading import Timer
+from datetime import datetime
 import QtBind
+import phBotChat
 import urllib.request
 import re
 import os
@@ -8,11 +10,10 @@ import shutil
 import time
 
 pName = 'PosRotate'
-pVersion = '1.7.0'
+pVersion = '2.0.1'
 pUrl = 'https://raw.githubusercontent.com/nmilchev/xPosRotate/refs/heads/main/xPosRotate.py'
 
 gui = QtBind.init(__name__, pName)
-
 
 # -------------------------
 # Globals
@@ -23,77 +24,78 @@ ENABLED = False
 timer_start_time = 0
 timer_running = False
 paused = False
-
 # Rotation System
 active_location = None
 rotation_order = []
 current_rotation_index = 0
 locations = ["","Location 1","Location 2","Location 3"]
 
+SPECIAL_ITEMS = [
+    "BearBoo",
+    "CuteBunny",
+    "Fire-Bred",
+    "Immortal",
+    "Craft The Min",
+    "Double Dragon",
+    "Acid",
+    "God of Fight"
+]
 
-# =========================
-# 🎨 GUI DESIGN
-# =========================
-
-# =========================
-# 💎 PREMIUM GUI DESIGN
-# =========================
+drop_counts = {name: 0 for name in SPECIAL_ITEMS}
+seen_drop_uids = set()
+total_special_drops = 0
 
 # ===== HEADER BAR =====
 QtBind.createLabel(gui, "══════════════════════════════", 5, 5)
-QtBind.createLabel(gui, "  ⚡ PATH ROTATION MANAGER ⚡", 15, 18)
+QtBind.createLabel(gui, "  ⚡ FGW/HoW ROTATION MANAGER ⚡", 15, 18)
 QtBind.createLabel(gui, "══════════════════════════════", 5, 32)
-
 # ===== POSITION CONTROL PANEL =====
-QtBind.createLabel(gui, "📍 Position control", 10, 50)
 
-QtBind.createLabel(gui, "Training Slot:", 20, 75)
-cmb_location = QtBind.createCombobox(gui, 110, 73, 150, 22)
-
+QtBind.createLabel(gui, "📍 Position control", 5, 50)
+QtBind.createLabel(gui, "Training Slot:", 10, 75)
+cmb_location = QtBind.createCombobox(gui, 80, 71, 100, 22)
 btn = QtBind.createButton(gui, "save_selected", "💾 SAVE POSITION", 20, 105)
 btn1 = QtBind.createButton(gui, "copy_selected", "🔙 BACK TO CENTER", 150, 105)
-
 QtBind.createLabel(gui, "──────────────────────────────", 5, 135)
 
 # ===== ROTATION ENGINE PANEL =====
 QtBind.createLabel(gui, "🎯 Training Rotation", 10, 150)
-
 spot1 = QtBind.createCheckBox(gui, "cb_1_clicked", "🔴 Inactive", 25, 175)
 spot2 = QtBind.createCheckBox(gui, "cb_2_clicked", "🔴 Inactive", 25, 195)
 spot3 = QtBind.createCheckBox(gui, "cb_3_clicked", "🔴 Inactive", 25, 215)
 QtBind.createCheckBox(gui, "cbEnable_clicked", "Enabled", 325, 245)
-
 QtBind.createLabel(gui, "──────────────────────────────", 5, 240)
-
-# ===== LIVE STATUS DASHBOARD =====
-QtBind.createLabel(gui, "📊 Status Panel", 10, 255)
-
-lblStatus = QtBind.createLabel(gui, "Mode: Idle", 25, 280)
-lblTime = QtBind.createLabel(gui, "Remaining: 00:00:00", 25, 300)
-btnStart = QtBind.createButton(gui, "btn_start_rotation", "✅ START", 150, 150)
-btnStop = QtBind.createButton(gui, "btn_stop_rotation", "⛔ STOP", 150, 180)
-btnRes = QtBind.createButton(gui, "btn_force_reset", "⏳ RESET ⏳", 150, 280)
-btnPause = QtBind.createButton(gui, "btn_pause_rotation", "⏸ PAUSE", 150, 210)
-
-QtBind.createLabel(gui, "══════════════════════════════", 5, 310)
-
-# ===== UPDATE =====
-btnUpdate = QtBind.createButton(gui, "btn_update", "🔄 UPDATE 🔄", 635, 5)
-
 # Checkbox map
 checkbox_map = {
     "cb_1": (spot1, "Location 1"),
     "cb_2": (spot2, "Location 2"),
     "cb_3": (spot3, "Location 3"),
 }
+# ===== LIVE STATUS DASHBOARD =====
+QtBind.createLabel(gui, "📊 Status Panel", 10, 255)
+lblStatus = QtBind.createLabel(gui, "Mode: Idle", 25, 280)
+lblTime = QtBind.createLabel(gui, "Remaining: 00:00:00", 25, 300)
+btnStart = QtBind.createButton(gui, "btn_start_rotation", "✅ START", 150, 150)
+btnStop = QtBind.createButton(gui, "btn_stop_rotation", "⛔ STOP", 150, 180)
+btnRes = QtBind.createButton(gui, "btn_force_reset", "⏳ RESET ⏳", 150, 280)
+btnPause = QtBind.createButton(gui, "btn_pause_rotation", "⏸ PAUSE", 150, 210)
+QtBind.createLabel(gui, "══════════════════════════════", 5, 310)
+
+# ===== Log =====
+QtBind.createLabel(gui, "Plugin Log:", 280, 3)
+lstLog = QtBind.createList(gui, 280, 25, 350, 260) 
+
+# ===== RIGHT SIDE =====
+vr = f"Version:{pVersion}"
+QtBind.createLabel(gui, vr, 565, 5)
+btnUpdate = QtBind.createButton(gui, "btn_update", "🔄 UPDATE 🔄", 630, 1)
+QtBind.createLabel(gui, "<b>💼 Drops 💼</b>", 640, 28)
+lstDrops = QtBind.createList(gui,632,45,88,140)
+lblTotal = QtBind.createLabel(gui, 'Total Drops: 0', 635, 190)
+
 def cbEnable_clicked(checked):
     global ENABLED
-    ENABLED = checked
-
-    if ENABLED:
-        log('FGW/HoW Automation ENABLED')
-    else:
-        log('FGW/HoW Automation DISABLED')
+    ENABLED = True
 
 start = "walk,6428,1108,0"
 SCRIPT = """use,FGW - Hall of Warship
@@ -380,22 +382,37 @@ walk,19483,6178,1115
 walk,19497,6181,1115
 walk,19475,6183,1115
 use,returnscroll
+report
 stop
 """
-
 
 # =========================
 # GAME STATE
 # =========================
 def is_ingame():
     return get_character_data() is not None
-
+    
 def getPath():
     return get_config_dir()+pName+"\\"
-
 # -------------------------
 # Helpers
 # -------------------------
+log_buffer = []
+MAX_LOGS = 15
+
+def add_log(text):
+    global log_buffer
+    
+    timestamp = datetime.now().strftime('%H:%M:%S')
+    entry = f"[{timestamp}] {text}"
+
+    log_buffer.append(entry)
+    if len(log_buffer) > MAX_LOGS:
+        log_buffer.pop(0)
+        
+    QtBind.clear(gui, lstLog)
+    for line in log_buffer:
+        QtBind.append(gui, lstLog, line)
 
 def get_latest_version(url):
     try:
@@ -410,81 +427,97 @@ def get_latest_version(url):
         pass
     return None, None
 
-
 def compare_version(a, b):
     a = tuple(map(int, a.split(".")))
     b = tuple(map(int, b.split(".")))
     return a < b
 
-
 def btn_update():
     global pVersion, pUrl
-
     if not pUrl:
-        log("❌ No update URL defined.")
+        add_log("❌ No update URL defined.")
         return
-
-    log("🔎 Checking for updates...")
-
+    add_log("🔎 Checking for updates...")
     latest_version, new_code = get_latest_version(pUrl)
-
     if not latest_version:
-        log("❌ Could not check version.")
+        add_log("❌ Could not check version.")
         return
-
     if not compare_version(pVersion, latest_version):
-        log("✔ Plugin already up to date.")
+        add_log("✔ Plugin already up to date.")
         return
-
     try:
         current_file = os.path.realpath(__file__)
         backup_file = current_file + ".bkp"
-
         # Create backup
         shutil.copyfile(current_file, backup_file)
-
         # Overwrite current plugin
         with open(current_file, "w", encoding="utf-8") as f:
             f.write(new_code)
-
-        log(f"✅ Updated successfully to v{latest_version}")
-        log("♻ Please reload the plugin.")
-
+        add_log(f"✅ Updated successfully to v{latest_version}")
+        add_log("♻ Please reload the plugin.")
     except Exception as e:
-        log("❌ Update failed:")
-        log(str(e))
+        add_log("❌ Update failed:")
+        add_log(str(e))
+
+def dropps():
+    global total_special_drops
+
+    drops = get_drops()
+    if not drops:
+        return
+
+    for uid, drop in drops.items():
+        if uid in seen_drop_uids:
+            continue
+        seen_drop_uids.add(uid)
+
+        item_name = drop.get('name', '')
+        quantity = drop.get('quantity', 1)
+
+        for name in SPECIAL_ITEMS:
+            if name.lower() in item_name.lower():
+                drop_counts[name] += quantity
+                total_special_drops += quantity
+
+                text = f"{name} x{quantity}"
+                QtBind.append(gui, lstDrops, text)
+                QtBind.setText(gui, lblTotal, f"Total Drops: {total_special_drops}")
+                break
+
+def send_report():
+    if total_special_drops == 0:
+        phBotChat.Party("Finished my run with 0 drops :(")
+        add_log("🏃🏃🏃 Run Finished with 0 drops 😭")
+        return
+    report_parts = []
+    for name, count in drop_counts.items():
+        if count > 0:
+            report_parts.append(f"{name} ")
+    if not report_parts:
+        return
+    report_text = " | ".join(report_parts)
+
+    message = (f"Run finished! Drops: {total_special_drops} -> {report_text}")
+    add_log("🏃🏃🏃 Run finished!")
+    add_log(f"Drops: {total_special_drops} -> {report_text}")
+    phBotChat.Party(message)
 
 def btn_pause_rotation():
     global paused
-
     if not timer_running:
-        log("⚠ We didn't even started ...  🤔 Nothing is running.")
+        add_log("⚠ We didn't even started ...  🤔 Nothing is running.")
         return
-
     paused = not paused
-
     if paused:
         stop_bot()
         QtBind.setText(gui, lblStatus, "Mode: Paused")
-        log("⏸ Rotation paused.")
+        add_log("⏸ Rotation paused.")
     else:
-        QtBind.setText(gui, lblStatus, "Mode: Rotation Active")
-        log("▶ Rotation resumed.")
-
-        # If timer already expired while paused
+        QtBind.setText(gui, lblStatus, "Mode: Idle")
+        add_log("▶ Rotation resumed.")
         if get_remaining() <= 0:
-            log("⏳ Time was over during pause. Continuing rotation...")
-            rebuild_rotation_list()
-
-            if not rotation_order:
-                return
-
-            global current_rotation_index
-            current_rotation_index += 1
-            if current_rotation_index >= len(rotation_order):
-                current_rotation_index = 0
-
-            start_training(rotation_order[current_rotation_index])
+            add_log("⏳ Time was over during pause.")
+            add_log("⏳ Continuing rotation...")
 
 def format_time(seconds):
     seconds = int(seconds)
@@ -502,35 +535,25 @@ def get_remaining():
 
 def handle_checkbox(name, checked):
     global timer_running
-
     element, label = checkbox_map[name]
-
     if checked:
         QtBind.setText(gui, element, "🟢 Active")
     else:
         QtBind.setText(gui, element, "🔴 Inactive")
-
     rebuild_rotation_list()
-
-    # If timer not running, start automatically from first active
-    #if not timer_running and rotation_order:
-     #   start_training(rotation_order[current_rotation_index])
 
 def rebuild_rotation_list():
     global rotation_order, current_rotation_index
-
+    
     rotation_order = []
-
     for key in checkbox_map:
         element, label = checkbox_map[key]
         if QtBind.isChecked(gui, element):
             rotation_order.append(label)
 
-    # Reset index if out of range
     if current_rotation_index >= len(rotation_order):
         current_rotation_index = 0
-
-    log(f"🔁 Rotation list updated: {rotation_order}")
+    add_log(f"🔁 Refreshing scripts")
 
 
 def btn_start_rotation():
@@ -540,93 +563,70 @@ def btn_start_rotation():
     rebuild_rotation_list()
 
     if not rotation_order:
-        log("❌ No active locations selected.")
-        QtBind.setText(gui, lblStatus, "Mode: Idle (No Locations)")
+        add_log("❌ No active locations selected.")
+        QtBind.setText(gui, lblStatus, "Mode: Idle")
         return
 
     if timer_running:
-        log("⚠ Rotation already running.")
+        add_log("⚠ Rotation already running.")
         return
 
     current_rotation_index = 0
-    #timer_start_time = time.time()
-    #timer_running = True
-
     start_training(rotation_order[current_rotation_index])
-
-    QtBind.setText(gui, lblStatus, "Mode: Rotation Active")
-    log("▶ Rotation started.")
+    
+    QtBind.setText(gui, lblStatus, "Mode: Active")
+    add_log("▶ Rotation started.")
 
 def btn_stop_rotation():
     global timer_running, timer_start_time, current_rotation_index, ENABLED, paused
-
-    paused = False
-    ENABLED = False
-    # Stop timer
-    timer_running = False
-    timer_start_time = 0
-
-    # Reset rotation index
-    current_rotation_index = 0
-
-    # Stop bot completely
     stop_bot()
-
-    # UI Reset
+    paused = False
+    ENABLED = False timer_running = False
+    timer_start_time= 0
+    current_rotation_index = 0
     QtBind.setText(gui, lblStatus, "Mode: Stopped")
     QtBind.setText(gui, lblTime, "Remaining: 00:00:00")
-
-    log("⛔ FULL STOP executed. All timers and rotations stopped.")
+    add_log("⛔ FULL STOP executed. All timers and rotations stopped.")
 
 def btn_force_reset():
     global timer_running, timer_start_time, current_rotation_index
-
+    
     rebuild_rotation_list()
-
-    if not rotation_order:
-        log("❌ No active locations selected.")
+    
+    if not rotation_order: 
+        add_log("❌ No active locations selected.")
         QtBind.setText(gui, lblStatus, "Mode: Idle (No Locations)")
         return
-
-    if timer_running:
+    if timer_running: 
         timer_start_time = 0
         timer_running = False
-        log("⚠ Timer has been force reseted !!! ⚠")
+        add_log("⚠ Timer has been force reseted !!! ⚠")
         return
-    log("⚠ Timer isnt started / nothing to reset !!! ⚠")
-
+    add_log("⚠ Timer isnt started / nothing to reset !!! ⚠")
 
 def start_training(location_name):
     global timer_start_time, timer_running
-
     if not load_training_script(location_name):
+        add_log(f"🟢 Bot started. Using {location_name}")
         return
-
-    #timer_start_time = time.time()
-    #timer_running = True
-
-    QtBind.setText(gui, lblStatus, f"Status: Training at {location_name}")
-    log(f"🟢 Started training at {location_name}")
+    add_log(f"🔴🔴🔴 Opps, Seems we cant can't start.")
 
 def load_training_script(location_name):
     data = get_character_data()
     if not data:
-        log("❌ Not in game.")
+        add_log("❌ Not in game.")
         return False
-
     name = data['name']
     filename = f"{name}_{location_name.replace(' ', '_')}.txt"
     filepath = os.path.join(getPath(), filename)
 
     if not os.path.exists(filepath):
-        log(f"❌ Script not found for {location_name}")
+        add_log(f"❌ Script not found for {location_name}")
         return False
-
     stop_bot()
     set_training_script(filepath)
     Timer(1.0,start_bot).start()
-
-    return 0
+    return 
 
 
 def cb_1_clicked(checked):
@@ -647,20 +647,27 @@ def _rebuild_combos():
         pass
 
 def btn_start_clicked():
-    global timer_start_time, timer_running
+    global timer_start_time, timer_running, seen_drop_uids, drop_counts, total_special_drops
 
     if timer_running:
-        log("Timer already running. Not resetting.")
+        add_log("⏱Going back. Maybe we missed some mobs !?")
         return
-
+        
     timer_start_time = time.time()
     timer_running = True
+    
+    seen_drop_uids = set()
+    drop_counts = {name: 0 for name in SPECIAL_ITEMS}
+    total_special_drops = 0
+
+    QtBind.clear(gui, lstDrops)
+    QtBind.setText(gui, lblTotal, 'Total Drops: 0')
     QtBind.setText(gui, lblStatus, "Status: Running")
-    log("Timer started.")
+    add_log("⏱ Entered through the portal. ⏱")
 
 def copy_selected():
     line = "path,25000,6428,1108,0"
-    log("📍 GOING BACK TO Jangan CENTER:")
+    add_log("📍 GOING BACK TO Jangan CENTER:")
     start_script(line)
 
 def save_selected():
@@ -669,8 +676,9 @@ def save_selected():
     selected = QtBind.text(gui, cmb_location)
 
     if not selected:
-        log("❌ No location selected!")
+        add_log("❌ No location selected!")
         return
+        
     p = get_position()
     region = p['region']
     x = int(p['x'])
@@ -686,57 +694,56 @@ def save_selected():
 
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(start + "\n" + line + "\n" + SCRIPT)
-    log(f"💾 Saved position for {selected}")
-
+    add_log(f"💾 Saved position for {selected}")
 
 # -------------------------
 # Event Loop
 # -------------------------
 def event_loop():
     global timer_running, current_rotation_index
-    
-    if not ENABLED:
+    dropps(); 
+    if not ENABLED: 
         return 
-    if not timer_running:
+    if not timer_running: 
         return 
 
     remaining = get_remaining()
     QtBind.setText(gui, lblTime, f"Remaining: {format_time(remaining)}")
 
-    if remaining <= 0:
-        # If paused → do nothing, wait for unpause
+    if remaining <= 0: 
         if paused:
             QtBind.setText(gui, lblStatus, "Mode: Paused (Time Over)")
             return
-        log("⏳ Timer finished. Switching location.")
+            add_log("⏱ It's time to move on. Changing script.")
+            
         timer_running = False
-
         rebuild_rotation_list()
-
-        if not rotation_order:
-            log("❌ No active locations.")
-            return 
-
+        if not rotation_order: 
+            add_log("❌ No active locations.")
+        return 
+        
         current_rotation_index += 1
-        if current_rotation_index >= len(rotation_order):
+        if current_rotation_index >= len(rotation_order): 
             current_rotation_index = 0
-
+            
         next_location = rotation_order[current_rotation_index]
         start_training(next_location)
-
-    return 
+        return 
 
 
 # ------------------------
 # External Call Function
 # ------------------------
-def get_hole(a):
+def get_hole(a): 
     btn_start_clicked()
-    return
+    return True
+def report(a): 
+    send_report()
+    return True
 
 
 # Plugin loaded
-log("Plugin: "+pName+" ❴ by KriKo ❵ v"+pVersion+" successfully loaded ✔")
+add_log("Plugin: "+pName+" ❴ by KriKo ❵ v"+pVersion+" successfully loaded ✔")
 
 if os.path.exists(getPath()):
 	# Adding RELOAD plugin support
@@ -745,4 +752,4 @@ else:
 	# Creating configs folder
 	os.makedirs(getPath())
 	_rebuild_combos()
-	log('Plugin: '+pName+' folder has been created')
+	add_log('Plugin: '+pName+' folder has been created')
