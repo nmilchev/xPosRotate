@@ -10,7 +10,7 @@ import shutil
 import time
 
 pName = 'PosRotate'
-pVersion = '2.0.2'
+pVersion = '2.0.3'
 pUrl = 'https://raw.githubusercontent.com/nmilchev/xPosRotate/refs/heads/main/xPosRotate.py'
 
 gui = QtBind.init(__name__, pName)
@@ -581,7 +581,8 @@ def btn_stop_rotation():
     global timer_running, timer_start_time, current_rotation_index, ENABLED, paused
     stop_bot()
     paused = False
-    ENABLED = False timer_running = False
+    ENABLED = False
+	timer_running = False
     timer_start_time = 0
     current_rotation_index = 0
     QtBind.setText(gui, lblStatus, "Mode: Stopped")
