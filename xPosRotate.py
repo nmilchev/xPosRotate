@@ -18,7 +18,7 @@ gui = QtBind.init(__name__, pName)
 # -------------------------
 # Globals
 # -------------------------
-TIMER_DURATION = 3600  # 3600 = 1 hour
+TIMER_DURATION = 60  # 3600 = 1 hour
 
 ENABLED = False
 timer_start_time = 0
@@ -726,8 +726,10 @@ def save_selected():
 # -------------------------
 def event_loop():
     global timer_running, current_rotation_index
+    #add_log("⏱ DEBUG not dds")
     dropps(); 
     if not ENABLED: 
+        #add_log("⏱ DEBUG not enabled")
         return 
     if not timer_running: 
         return 
@@ -739,13 +741,15 @@ def event_loop():
         if paused:
             QtBind.setText(gui, lblStatus, "Mode: Paused (Time Over)")
             return
-            add_log("⏱ It's time to move on. Changing script.")
+        add_log("⏱ It's time to move on. Changing script.")
             
         timer_running = False
+        
         rebuild_rotation_list()
+        
         if not rotation_order: 
             add_log("❌ No active locations.")
-        return 
+            return 
         
         current_rotation_index += 1
         if current_rotation_index >= len(rotation_order): 
@@ -753,7 +757,7 @@ def event_loop():
             
         next_location = rotation_order[current_rotation_index]
         start_training(next_location)
-        return 
+    return 
 
 
 # ------------------------
