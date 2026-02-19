@@ -10,7 +10,7 @@ import shutil
 import time
 
 pName = 'PosRotate'
-pVersion = '2.0.3'
+pVersion = '2.0.4'
 pUrl = 'https://raw.githubusercontent.com/nmilchev/xPosRotate/refs/heads/main/xPosRotate.py'
 
 gui = QtBind.init(__name__, pName)
@@ -582,7 +582,7 @@ def btn_stop_rotation():
     stop_bot()
     paused = False
     ENABLED = False
-	timer_running = False
+    timer_running = False
     timer_start_time = 0
     current_rotation_index = 0
     QtBind.setText(gui, lblStatus, "Mode: Stopped")
@@ -689,7 +689,7 @@ def save_selected():
     line = f"path,{region},{x},{y},{z}"
 
     # Create separate file per location
-	
+    
     filename = f"{name}_{selected.replace(' ', '_')}.txt"
     filepath = os.path.join(getPath(), filename)
 
@@ -747,10 +747,10 @@ def report(a):
 add_log("Plugin: "+pName+" ❴ by KriKo ❵ v"+pVersion+" successfully loaded ✔")
 
 if os.path.exists(getPath()):
-	# Adding RELOAD plugin support
-	_rebuild_combos()
+    # Adding RELOAD plugin support
+    _rebuild_combos()
 else:
-	# Creating configs folder
-	os.makedirs(getPath())
-	_rebuild_combos()
-	add_log('Plugin: '+pName+' folder has been created')
+    # Creating configs folder
+    os.makedirs(getPath())
+    _rebuild_combos()
+    add_log('Plugin: '+pName+' folder has been created')
