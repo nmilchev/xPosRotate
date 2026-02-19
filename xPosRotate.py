@@ -10,7 +10,7 @@ import shutil
 import time
 
 pName = 'PosRotate'
-pVersion = '2.0.4'
+pVersion = '2.0.5'
 pUrl = 'https://raw.githubusercontent.com/nmilchev/xPosRotate/refs/heads/main/xPosRotate.py'
 
 gui = QtBind.init(__name__, pName)
@@ -18,7 +18,7 @@ gui = QtBind.init(__name__, pName)
 # -------------------------
 # Globals
 # -------------------------
-TIMER_DURATION = 3600  # 1 hour
+TIMER_DURATION = 3600  # 3600 = 1 hour
 
 ENABLED = False
 timer_start_time = 0
@@ -44,6 +44,8 @@ SPECIAL_ITEMS = [
 drop_counts = {name: 0 for name in SPECIAL_ITEMS}
 seen_drop_uids = set()
 total_special_drops = 0
+_cbParty = False
+_cbPlayer = False
 
 # ===== HEADER BAR =====
 QtBind.createLabel(gui, "══════════════════════════════", 5, 5)
@@ -92,6 +94,41 @@ btnUpdate = QtBind.createButton(gui, "btn_update", "🔄 UPDATE 🔄", 630, 1)
 QtBind.createLabel(gui, "<b>💼 Drops 💼</b>", 640, 28)
 lstDrops = QtBind.createList(gui,632,45,88,140)
 lblTotal = QtBind.createLabel(gui, 'Total Drops: 0', 635, 190)
+QtBind.createLabel(gui, '<b>Notify:📞<b>', 635, 210)
+cbParty = QtBind.createCheckBox(gui, "cbParty_clicked", "🟢 Party", 635, 225)
+QtBind.setChecked(gui, cbParty, True)
+cbPlayer = QtBind.createCheckBox(gui, "cbPlayer_clicked", "🔴 Player", 635, 240)
+player_not = QtBind.createLineEdit(gui,"",632,260,88,20)
+
+def cb_1_clicked(checked): handle_checkbox("cb_1", checked)
+def cb_2_clicked(checked): handle_checkbox("cb_2", checked)
+def cb_3_clicked(checked): handle_checkbox("cb_3", checked)
+
+def cbParty_clicked(checked):
+    global _cbParty
+    _cbParty = checked
+    if _cbParty:
+        QtBind.setText(gui, cbParty, "🟢 Party")
+    else:
+        QtBind.setText(gui, cbParty, "🔴 Party")
+
+def cbPlayer_clicked(checked):
+    global _cbPlayer
+    player_name = QtBind.text(gui, player_not).strip()
+    
+    if checked and not player_name:
+        add_log("⚠ Enter player name first.")
+        QtBind.setChecked(gui, cbPlayer, False)
+        QtBind.setText(gui, cbPlayer, "🔴 Player")
+        _cbPlayer = False
+        return
+    _cbPlayer = checked
+    if _cbPlayer:
+        QtBind.setText(gui, cbPlayer, f"🟢 {player_name}")
+        QtBind.move(gui, player_not, 1000, 0)
+    else:
+        QtBind.setText(gui, cbPlayer, "🔴 Player")
+        QtBind.move(gui, player_not, 632, 260)
 
 def cbEnable_clicked(checked):
     global ENABLED
@@ -391,7 +428,6 @@ stop
 # =========================
 def is_ingame():
     return get_character_data() is not None
-    
 def getPath():
     return get_config_dir()+pName+"\\"
 # -------------------------
@@ -402,7 +438,6 @@ MAX_LOGS = 15
 
 def add_log(text):
     global log_buffer
-    
     timestamp = datetime.now().strftime('%H:%M:%S')
     entry = f"[{timestamp}] {text}"
 
@@ -416,9 +451,7 @@ def add_log(text):
 
 def get_latest_version(url):
     try:
-        req = urllib.request.Request(url, headers={
-            'User-Agent': "Mozilla/5.0"
-        })
+        req = urllib.request.Request(url, headers={'User-Agent': "Mozilla/5.0"})
         with urllib.request.urlopen(req) as w:
             pyCode = str(w.read().decode("utf-8"))
             if re.search("\npVersion = [0-9.'\"]*", pyCode):
@@ -461,19 +494,15 @@ def btn_update():
 
 def dropps():
     global total_special_drops
-
     drops = get_drops()
     if not drops:
         return
-
     for uid, drop in drops.items():
         if uid in seen_drop_uids:
             continue
         seen_drop_uids.add(uid)
-
         item_name = drop.get('name', '')
         quantity = drop.get('quantity', 1)
-
         for name in SPECIAL_ITEMS:
             if name.lower() in item_name.lower():
                 drop_counts[name] += quantity
@@ -485,22 +514,28 @@ def dropps():
                 break
 
 def send_report():
-    if total_special_drops == 0:
-        phBotChat.Party("Finished my run with 0 drops :(")
-        add_log("🏃🏃🏃 Run Finished with 0 drops 😭")
-        return
+    global _cbParty, _cbPlayer, total_special_drops
+    player_name = QtBind.text(gui, player_not).strip()
     report_parts = []
     for name, count in drop_counts.items():
         if count > 0:
-            report_parts.append(f"{name} ")
-    if not report_parts:
-        return
+            report_parts.append(f"{name} x{count}")
     report_text = " | ".join(report_parts)
-
-    message = (f"Run finished! Drops: {total_special_drops} -> {report_text}")
-    add_log("🏃🏃🏃 Run finished!")
-    add_log(f"Drops: {total_special_drops} -> {report_text}")
-    phBotChat.Party(message)
+    
+    if total_special_drops == 0:
+        message = "Run Finished with 0 drops 😭"
+        add_log("🏃🏃🏃 Run Finished with 0 drops 😭")
+    else:
+        message = f"Run finished! Drops:-> {report_text}"
+        add_log("🏃🏃🏃 Run finished!🏃🏃🏃")
+        add_log(f"🏷️🏷️🏷️: -> {report_text}")
+    # Send to Party if enabled
+    if _cbParty:
+        phBotChat.Party(message)
+    # Send to Player if enabled
+    if _cbPlayer:
+        if player_name:
+            phBotChat.Private(player_name, message)
 
 def btn_pause_rotation():
     global paused
@@ -520,10 +555,7 @@ def btn_pause_rotation():
             add_log("⏳ Continuing rotation...")
 
 def format_time(seconds):
-    seconds = int(seconds)
-    hours = seconds // 3600
-    minutes = (seconds % 3600) // 60
-    secs = seconds % 60
+    seconds = int(seconds); hours = seconds // 3600; minutes = (seconds % 3600) // 60;  secs = seconds % 60
     return "{:02d}:{:02d}:{:02d}".format(hours, minutes, secs)
 
 def get_elapsed():
@@ -540,7 +572,7 @@ def handle_checkbox(name, checked):
         QtBind.setText(gui, element, "🟢 Active")
     else:
         QtBind.setText(gui, element, "🔴 Inactive")
-    rebuild_rotation_list()
+    #rebuild_rotation_list()
 
 def rebuild_rotation_list():
     global rotation_order, current_rotation_index
@@ -628,14 +660,6 @@ def load_training_script(location_name):
     set_training_script(filepath)
     Timer(1.0,start_bot).start()
     return 
-
-
-def cb_1_clicked(checked):
-    handle_checkbox("cb_1", checked)
-def cb_2_clicked(checked):
-    handle_checkbox("cb_2", checked)
-def cb_3_clicked(checked):
-    handle_checkbox("cb_3", checked)
 
 def _rebuild_combos():
     try:
