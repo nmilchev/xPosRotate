@@ -582,7 +582,7 @@ def btn_stop_rotation():
     stop_bot()
     paused = False
     ENABLED = False timer_running = False
-    timer_start_time= 0
+    timer_start_time = 0
     current_rotation_index = 0
     QtBind.setText(gui, lblStatus, "Mode: Stopped")
     QtBind.setText(gui, lblTime, "Remaining: 00:00:00")
