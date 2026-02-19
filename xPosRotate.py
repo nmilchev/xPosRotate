@@ -10,7 +10,7 @@ import shutil
 import time
 
 pName = 'PosRotate'
-pVersion = '2.0.5'
+pVersion = '2.0.6'
 pUrl = 'https://raw.githubusercontent.com/nmilchev/xPosRotate/refs/heads/main/xPosRotate.py'
 
 gui = QtBind.init(__name__, pName)
