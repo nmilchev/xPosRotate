@@ -10,7 +10,7 @@ import shutil
 import time
 
 pName = 'PosRotate'
-pVersion = '3.0.1'
+pVersion = '3.0.2'
 pUrl = 'https://raw.githubusercontent.com/nmilchev/xPosRotate/refs/heads/main/xPosRotate.py'
 NewestVersion = 0
 
@@ -20,32 +20,27 @@ gui = QtBind.init(__name__, pName)
 # Globals
 # -------------------------
 ENABLED = False
-#timer_start_time = 0
-#timer_running = False
+paused = False
 mode_state = {
     "HoW": {
         "timer_start": 0,
         "running": False,
-        "duration": 3600,  # 3600 = 1 hour
+        "duration": 60,  # 3600 = 1 hour
         "current_index": 0
     },
     "FGW": {
         "timer_start": 0,
         "running": False,
-        "duration": 3600,  # 3600 = 1 hour
+        "duration": 90,  # 3600 = 1 hour
         "current_index": 0
     }
 }
-paused = False
 TOWN_REGIONS = {25000, 26265, 23687, 27244, 26959, 22618}
 rotation_order = []
-# Rotation System
-active_location = None
 rotation_data = {
     "HoW": [],
     "FGW": []
 }
-
 locations = ["","Location 1","Location 2","Location 3"]
 
 SPECIAL_ITEMS = ["BearBoo", "CuteBunny", "Fire-Bred", "Immortal", "Craft The Min", "Double Dragon", "Acid", "God of Fight", # HoW
@@ -64,7 +59,6 @@ drop_data = {
         "total": 0
     }
 }
-
 seen_drop_uids = set()
 _cbParty = False
 _cbPlayer = False
@@ -77,15 +71,10 @@ QtBind.createLabel(gui, "══════════════════�
 # ===== POSITION CONTROL PANEL =====
 
 QtBind.createLabel(gui, "📍 Position control", 5, 50)
-
-
 cbModeHoW = QtBind.createCheckBox(gui, "cbModeHoW_clicked", "🟢 HoW", 30, 75)
 cbModeFGW = QtBind.createCheckBox(gui, "cbModeFGW_clicked", "🔴 FGW", 30, 105)
-
 QtBind.setChecked(gui, cbModeHoW, True)
 
-
-#QtBind.createLabel(gui, "Training Spot:", 10, 95)
 cmb_location = QtBind.createCombobox(gui, 110, 47, 100, 22)
 QtBind.append(gui, cmb_location, "Location 1")
 QtBind.append(gui, cmb_location, "Location 2")
@@ -93,7 +82,6 @@ QtBind.append(gui, cmb_location, "Location 3")
 btn = QtBind.createButton(gui, "save_selected", "💾 SAVE POSITION", 150, 75)
 btn1 = QtBind.createButton(gui, "copy_selected", "🔙 BACK TO CENTER", 150, 105)
 QtBind.createLabel(gui, "──────────────────────────────", 5, 135)
-
 # ===== ROTATION ENGINE PANEL =====
 QtBind.createLabel(gui, "🎯 Active locations:", 70, 145)
 QtBind.createLabel(gui, "⚔️HoW", 55, 160)
@@ -110,22 +98,17 @@ fgw_spot3 = QtBind.createCheckBox(gui, "cb_fgw3_clicked", "🔴 Inactive", 140, 
 QtBind.createLabel(gui, "──────────────────────────────", 5, 240)
 
 # ===== LIVE STATUS DASHBOARD =====
-
 lblTime = QtBind.createLabel(gui, "⚔️ HoW: 00:00:00", 25, 255)
 lblTime2 = QtBind.createLabel(gui, "🔥 FGW: 00:00:00", 160, 255)
 btnStart = QtBind.createButton(gui, "btn_start_rotation", "✅ START", 25, 280)
 btnStop = QtBind.createButton(gui, "btn_stop_rotation", "⛔ STOP", 120, 280)
-
 btnPause = QtBind.createButton(gui, "btn_pause_rotation", "⏸ PAUSE", 200, 280)
 QtBind.createLabel(gui, "══════════════════════════════", 5, 310)
-
 # ===== Log =====
 QtBind.createLabel(gui, "Plugin Log:", 280, 3)
 lstLog = QtBind.createList(gui, 280, 25, 350, 260) 
-
 # ===== RIGHT SIDE =====
-vr = f"Version:{pVersion}"
-QtBind.createLabel(gui, vr, 555, 5)
+vr = f"Version:{pVersion}"; QtBind.createLabel(gui, vr, 555, 5)
 btnUpdate = QtBind.createButton(gui, "btn_update", "🔄 UPDATE 🔄", 630, 1)
 QtBind.createLabel(gui, "<b>💼 Drops 💼</b>", 640, 28)
 lstDrops = QtBind.createList(gui,632,45,88,140)
@@ -135,30 +118,25 @@ cbParty = QtBind.createCheckBox(gui, "cbParty_clicked", "🔴 Party", 635, 225)
 cbPlayer = QtBind.createCheckBox(gui, "cbPlayer_clicked", "🔴 Player", 635, 240)
 player_not = QtBind.createLineEdit(gui,"",632,260,88,20)
 
-
-
-# Helper to update data and UI label
-def update_location_state(mode, loc_name, checkbox_ui, checked):
-    # 1. Update the Text/Dot
-    label = f"Location {loc_name[-1]}" # Extracts '1', '2', or '3'
+def update_rotation(mode, index, ui_obj, checked):
+    loc_name = f"Location {index}"
     if checked:
-        QtBind.setText(gui, checkbox_ui, f"🟢 Active")
-        if label not in rotation_data[mode]:
-            rotation_data[mode].append(label)
+        QtBind.setText(gui, ui_obj, f"🟢 {loc_name}")
+        if loc_name not in rotation_data[mode]:
+            rotation_data[mode].append(loc_name)
     else:
-        QtBind.setText(gui, checkbox_ui, f"🔴 Inactive")
-        if label in rotation_data[mode]:
-            rotation_data[mode].remove(label)
+        QtBind.setText(gui, ui_obj, f"🔴 {loc_name}")
+        if loc_name in rotation_data[mode]:
+            rotation_data[mode].remove(loc_name)
+    rotation_data[mode].sort() # Keeps Locations 1, 2, 3 in order
 
-# HoW Handlers
-def cb_how1_clicked(checked): update_location_state("HoW", "Location 1", how_spot1, checked)
-def cb_how2_clicked(checked): update_location_state("HoW", "Location 2", how_spot2, checked)
-def cb_how3_clicked(checked): update_location_state("HoW", "Location 3", how_spot3, checked)
-
-# FGW Handlers
-def cb_fgw1_clicked(checked): update_location_state("FGW", "Location 1", fgw_spot1, checked)
-def cb_fgw2_clicked(checked): update_location_state("FGW", "Location 2", fgw_spot2, checked)
-def cb_fgw3_clicked(checked): update_location_state("FGW", "Location 3", fgw_spot3, checked)
+# Optimized UI Handlers
+def cb_how1_clicked(c): update_rotation("HoW", 1, how_spot1, c)
+def cb_how2_clicked(c): update_rotation("HoW", 2, how_spot2, c)
+def cb_how3_clicked(c): update_rotation("HoW", 3, how_spot3, c)
+def cb_fgw1_clicked(c): update_rotation("FGW", 1, fgw_spot1, c)
+def cb_fgw2_clicked(c): update_rotation("FGW", 2, fgw_spot2, c)
+def cb_fgw3_clicked(c): update_rotation("FGW", 3, fgw_spot3, c)
 
 def get_mode():
     return CURRENT_MODE
@@ -344,30 +322,29 @@ def finished():
     else:
         message = f"{mode} Drops -> {report_text}"
         add_log("🏃🏃🏃 Run finished!🏃🏃🏃"); add_log(f"🏷️🏷️🏷️: -> {report_text}")
-    if _cbParty:
-        phBotChat.Party(message)
+    if _cbParty: phBotChat.Party(message)
 
     if _cbPlayer and player_name:
         phBotChat.Private(player_name, message)
 
     add_log(message)
     
-    # --- MODE SWITCHING LOGIC ---
-    if CURRENT_MODE == "HoW":
-        CURRENT_MODE = "FGW"   
-        mode_state["FGW"]["running"] = True
-        QtBind.setChecked(gui, cbModeFGW, True)
-        QtBind.setChecked(gui, cbModeHoW, False)
-        QtBind.setText(gui, cbModeFGW, "🟢 FGW")
-        QtBind.setText(gui, cbModeHoW, "🔴 HoW")
+    next_mode = "FGW" if mode == "HoW" else "HoW"
+    # PROTECTION: Only switch if the next mode has checked locations
+    if len(rotation_data[next_mode]) > 0:
+        CURRENT_MODE = next_mode
+        add_log(f"🔄 Switching to {CURRENT_MODE} for next run")
     else:
-        CURRENT_MODE = "HoW"
-        mode_state["HoW"]["running"] = True
-        QtBind.setChecked(gui, cbModeHoW, True)
-        QtBind.setChecked(gui, cbModeFGW, False)
-        QtBind.setText(gui, cbModeHoW, "🟢 HoW")
-        QtBind.setText(gui, cbModeFGW, "🔴 FGW")
-    add_log(f"🔄 Switched to {CURRENT_MODE} for next run.")
+        add_log(f"⚠️ {next_mode} has no locations selected. Staying in {mode}.")
+    
+    mode_state[mode]["running"] = True
+    # Synchronize UI checkboxes and labels with the (potentially new) CURRENT_MODE
+    is_how = (CURRENT_MODE == "HoW")
+    QtBind.setChecked(gui, cbModeHoW, is_how)
+    QtBind.setChecked(gui, cbModeFGW, not is_how)
+    QtBind.setText(gui, cbModeHoW, "🟢 HoW" if is_how else "🔴 HoW")
+    QtBind.setText(gui, cbModeFGW, "🟢 FGW" if not is_how else "🔴 FGW")
+    #QtBind.setText(gui, panel, "⚔️HoW" if is_how else "⚔️FGW")
 
 def btn_pause_rotation():
     global paused
@@ -406,7 +383,6 @@ def btn_start_rotation():
 
     if not rotation_order:
         add_log("❌ No active locations selected.")
-        #QtBind.setText(gui, lblStatus, "Mode: Idle")
         return
 
     if mode_state[mode]["running"]:
@@ -420,10 +396,10 @@ def btn_start_rotation():
     if idx >= len(rotation_order):
         idx = 0
         mode_state[mode]["current_index"] = 0
-
+    idx = 0
     start_training(rotation_order[idx])
     
-    QtBind.setText(gui, lblStatus, "Mode: Active")
+
     add_log("▶ Rotation started.")
 
 def btn_stop_rotation():
@@ -438,7 +414,6 @@ def btn_stop_rotation():
         mode_state[mode]["running"] = False
         mode_state[mode]["current_index"] = 0
 
-   # QtBind.setText(gui, lblStatus, "Mode: Stopped")
     QtBind.setText(gui, lblTime, "⚔️ HoW: 00:00:00")
     QtBind.setText(gui, lblTime2, "🔥 FGW: 00:00:00")
     add_log("⛔ FULL STOP executed. All timers and rotations stopped.")
@@ -558,7 +533,6 @@ def event_loop():
     dropps(); 
     if get_remaining(mode) <= 0 and _in_town():
         if paused:
-           # QtBind.setText(gui, lblStatus, "Mode: Paused (Time Over)")
             return
         add_log("⏱ It's time to move on. Changing script.")
         
