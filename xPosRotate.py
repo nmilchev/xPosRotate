@@ -10,7 +10,7 @@ import shutil
 import time
 
 pName = 'PosRotate'
-pVersion = '3.0.2'
+pVersion = '3.0.3'
 pUrl = 'https://raw.githubusercontent.com/nmilchev/xPosRotate/refs/heads/main/xPosRotate.py'
 NewestVersion = 0
 
@@ -41,13 +41,10 @@ rotation_data = {
     "HoW": [],
     "FGW": []
 }
-locations = ["","Location 1","Location 2","Location 3"]
-
 SPECIAL_ITEMS = ["BearBoo", "CuteBunny", "Fire-Bred", "Immortal", "Craft The Min", "Double Dragon", "Acid", "God of Fight", # HoW
     "Broken key", "Large tong", "Phantom harp", "Evil's heart", "Vindictive spirit's bead", "Hook hand", "Commander's patch", "Sereness's tears" #FGW
 ]
 CURRENT_MODE = "HoW"
-last_mode = None
 
 drop_data = {
     "HoW": {
@@ -167,10 +164,6 @@ def cbPlayer_clicked(checked):
         QtBind.setText(gui, cbPlayer, "🔴 Player")
         QtBind.move(gui, player_not, 632, 260)
 
-def cbEnable_clicked(checked):
-    global ENABLED
-    ENABLED = True
-
 def cbModeHoW_clicked(checked):
     global CURRENT_MODE
     if not checked:
@@ -276,11 +269,43 @@ def btn_update():
         add_log("❌ Update failed:")
         add_log(str(e))
 
+def get_dimension_hole_count(mode):
+    inventory = get_inventory()
+    # Define the Server Name IDs
+    # Based on your input: ITEM_JUPITER_FGW_3 is for HoW
+    # You might need to check if FGW is ITEM_ETC_SD_TOKEN_01 or similar, 
+    # but we will keep 'shipwreck' as a fallback for FGW.
+    target_servername = "ITEM_JUPITER_FGW_3" if mode == "HoW" else "ITEM_ETC_TELEPORT_HOLE_WRECK_100_110_LEVEL_4" 
+    total_count = 0
+    
+    if inventory and 'items' in inventory:
+        for item in inventory['items']:
+            if isinstance(item, dict):
+                # get('servername') looks at the internal database ID
+                s_name = item.get('servername', '')
+                display_name = item.get('name', '')
+
+                # Match by Server Name (Exact) or fallback to display name for FGW
+                if s_name == target_servername:
+                    qty = item.get('quantity', 0)
+                    total_count += qty
+                    add_log("✅ Found {0} by ID: {1} (x{2})".format(mode, display_name, qty))
+                
+                # Fallback for FGW if we don't know the exact ITEM_ID yet
+                elif mode == "FGW" and "shipwreck" in display_name.lower():
+                    qty = item.get('quantity', 0)
+                    total_count += qty
+                    add_log("✅ Found FGW by Name: {0} (x{1})".format(display_name, qty))
+
+    return total_count > 0, total_count
+
 def dropps():
     mode = get_mode()
     drops = get_drops()
     if not drops:
         return
+
+    new_drop_detected = False
 
     for uid, drop in drops.items():
         if uid in seen_drop_uids:
@@ -294,57 +319,61 @@ def dropps():
             if name.lower() in item_name.lower():
                 drop_data[mode]["counts"][name] += quantity
                 drop_data[mode]["total"] += quantity
-
-                QtBind.append(gui, lstDrops, f"{name} x{quantity}")
-                QtBind.setText(
-                    gui,
-                    lblTotal,
-                    f"{mode} Total: {drop_data[mode]['total']}"
-                )
+                new_drop_detected = True
                 break
+
+    # If a new item was added, refresh the UI list to show combined totals
+    if new_drop_detected:
+        QtBind.clear(gui, lstDrops)
+        counts = drop_data[mode]["counts"]
+        for name, count in counts.items():
+            if count > 0:
+                QtBind.append(gui, lstDrops, f"{name} x{count}")
+        
+        QtBind.setText(
+            gui,
+            lblTotal,
+            f"{mode} Total: {drop_data[mode]['total']}"
+        )
 
 def finished():
     global CURRENT_MODE
-    
     mode = get_mode()
-    
     player_name = QtBind.text(gui, player_not).strip()
-
     counts = drop_data[mode]["counts"]
     total = drop_data[mode]["total"]
 
     report_parts = [f"{k} x{v}" for k, v in counts.items() if v > 0]
     report_text = " | ".join(report_parts)
 
-    if total == 0:
-        message = f"{mode} Completed - ... 0 drops."
-        add_log("🏃🏃🏃 Run Finished with 0 drops 😭")
-    else:
-        message = f"{mode} Drops -> {report_text}"
-        add_log("🏃🏃🏃 Run finished!🏃🏃🏃"); add_log(f"🏷️🏷️🏷️: -> {report_text}")
-    if _cbParty: phBotChat.Party(message)
-
-    if _cbPlayer and player_name:
-        phBotChat.Private(player_name, message)
-
+    message = f"{mode} Drops -> {report_text}" if total > 0 else f"{mode} Completed - 0 drops."
     add_log(message)
     
+    if _cbParty: phBotChat.Party(message)
+    if _cbPlayer and player_name: phBotChat.Private(player_name, message)
+
+    # --- MODE SWITCH LOGIC WITH QUANTITY LOGGING ---
     next_mode = "FGW" if mode == "HoW" else "HoW"
-    # PROTECTION: Only switch if the next mode has checked locations
+    
     if len(rotation_data[next_mode]) > 0:
-        CURRENT_MODE = next_mode
-        add_log(f"🔄 Switching to {CURRENT_MODE} for next run")
+        has_item, count = get_dimension_hole_count(next_mode)
+        
+        if has_item:
+            CURRENT_MODE = next_mode
+            add_log(f"🔄 Switching to {CURRENT_MODE} (Inventory: {count} left)")
+        else:
+            add_log(f"⚠️ Missing {next_mode} Hole! (Count: 0). Staying in {mode}.")
     else:
         add_log(f"⚠️ {next_mode} has no locations selected. Staying in {mode}.")
     
-    mode_state[mode]["running"] = True
-    # Synchronize UI checkboxes and labels with the (potentially new) CURRENT_MODE
+    # Synchronize UI
     is_how = (CURRENT_MODE == "HoW")
     QtBind.setChecked(gui, cbModeHoW, is_how)
     QtBind.setChecked(gui, cbModeFGW, not is_how)
     QtBind.setText(gui, cbModeHoW, "🟢 HoW" if is_how else "🔴 HoW")
     QtBind.setText(gui, cbModeFGW, "🟢 FGW" if not is_how else "🔴 FGW")
-    #QtBind.setText(gui, panel, "⚔️HoW" if is_how else "⚔️FGW")
+    
+    mode_state[mode]["running"] = True
 
 def btn_pause_rotation():
     global paused
@@ -396,7 +425,6 @@ def btn_start_rotation():
     if idx >= len(rotation_order):
         idx = 0
         mode_state[mode]["current_index"] = 0
-    idx = 0
     start_training(rotation_order[idx])
     
 
@@ -518,7 +546,7 @@ def save_selected():
 # -------------------------
 def event_loop():
     global rotation_order
-
+    
     if not ENABLED: 
         #add_log("⏱ DEBUG not enabled")
         return 
@@ -529,8 +557,8 @@ def event_loop():
     mode = get_mode()
     if not mode_state[mode]["running"]: 
         return 
-
-    dropps(); 
+    dropps()
+    
     if get_remaining(mode) <= 0 and _in_town():
         if paused:
             return
@@ -539,16 +567,18 @@ def event_loop():
         mode_state[mode]["running"] = False
 
         rotation_order = rotation_data[mode]
-        if rotation_order:
-            # 3. Get and increment ONLY this mode's index
-            idx = mode_state[mode]["current_index"]
-            new_idx = (idx + 1) % len(rotation_order)
-            mode_state[mode]["current_index"] = new_idx
+        if not rotation_order:
+            add_log("⚠ No active locations.")
+            return
+        # 3. Get and increment ONLY this mode's index
+        idx = mode_state[mode]["current_index"]
+        new_idx = (idx + 1) % len(rotation_order)
+        mode_state[mode]["current_index"] = new_idx
             
-            # 4. Start the next script in the sequence for THIS mode
-            next_loc = rotation_order[new_idx]
-            add_log(f"🔁 {mode} sequence: Moving to {next_loc}")
-            start_training(next_loc)
+        # 4. Start the next script in the sequence for THIS mode
+        next_loc = rotation_order[new_idx]
+        add_log(f"🔁 {mode} sequence: Moving to {next_loc}")
+        start_training(next_loc)
     return 
 
 
