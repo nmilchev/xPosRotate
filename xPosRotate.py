@@ -399,12 +399,15 @@ def btn_start_rotation():
     ENABLED = True
     mode = get_mode()
     
+    has_item, count = get_dimension_hole_count(mode)
     rotation_order = rotation_data[mode]
 
     if not rotation_order:
         add_log("❌ No active locations selected.")
         return
-
+    if not has_item:
+        add_log(f"🚫 Cannot Start: You have 0 {mode} Dimension Holes!")
+        return
     if mode_state[mode]["running"]:
         add_log("⚠ Rotation already running.")
         return
