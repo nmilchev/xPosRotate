@@ -10,7 +10,7 @@ import shutil
 import time
 
 pName = 'PosRotate'
-pVersion = '3.0.3'
+pVersion = '3.0.4'
 pUrl = 'https://raw.githubusercontent.com/nmilchev/xPosRotate/refs/heads/main/xPosRotate.py'
 NewestVersion = 0
 
@@ -351,6 +351,7 @@ def finished():
         
         if has_item:
             CURRENT_MODE = next_mode
+            mode_state[CURRENT_MODE]["running"] = True
             add_log(f"🔄 Switching to {CURRENT_MODE} (Inventory: {count} left)")
         else:
             add_log(f"⚠️ Missing {next_mode} Hole! (Count: 0). Staying in {mode}.")
@@ -364,7 +365,7 @@ def finished():
     QtBind.setText(gui, cbModeHoW, "🟢 HoW" if is_how else "🔴 HoW")
     QtBind.setText(gui, cbModeFGW, "🟢 FGW" if not is_how else "🔴 FGW")
     
-    mode_state[mode]["running"] = True
+    
 
 def btn_pause_rotation():
     global paused
@@ -556,11 +557,12 @@ def event_loop():
     if get_remaining(mode) <= 0 and _in_town():
         if paused:
             return
+            
         add_log("⏱ It's time to move on. Changing script.")
         
         mode_state[mode]["running"] = False
-
         rotation_order = rotation_data[mode]
+        
         if not rotation_order:
             add_log("⚠ No active locations.")
             return
