@@ -25,13 +25,13 @@ mode_state = {
     "HoW": {
         "timer_start": 0,
         "running": False,
-        "duration": 60,  # 3600 = 1 hour
+        "duration": 3600,  # 3600 = 1 hour
         "current_index": 0
     },
     "FGW": {
         "timer_start": 0,
         "running": False,
-        "duration": 90,  # 3600 = 1 hour
+        "duration": 3600,  # 3600 = 1 hour
         "current_index": 0
     }
 }
