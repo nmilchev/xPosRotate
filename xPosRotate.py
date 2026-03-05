@@ -271,32 +271,23 @@ def btn_update():
 
 def get_dimension_hole_count(mode):
     inventory = get_inventory()
-    # Define the Server Name IDs
-    # Based on your input: ITEM_JUPITER_FGW_3 is for HoW
-    # You might need to check if FGW is ITEM_ETC_SD_TOKEN_01 or similar, 
-    # but we will keep 'shipwreck' as a fallback for FGW.
     target_servername = "ITEM_JUPITER_FGW_3" if mode == "HoW" else "ITEM_ETC_TELEPORT_HOLE_WRECK_100_110_LEVEL_4" 
     total_count = 0
     
     if inventory and 'items' in inventory:
         for item in inventory['items']:
             if isinstance(item, dict):
-                # get('servername') looks at the internal database ID
                 s_name = item.get('servername', '')
                 display_name = item.get('name', '')
-
-                # Match by Server Name (Exact) or fallback to display name for FGW
+                
                 if s_name == target_servername:
                     qty = item.get('quantity', 0)
                     total_count += qty
-                    add_log("✅ Found {0} by ID: {1} (x{2})".format(mode, display_name, qty))
-                
-                # Fallback for FGW if we don't know the exact ITEM_ID yet
+                    #add_log("✅ Found {0} by ID: {1} (x{2})".format(mode, display_name, qty))
                 elif mode == "FGW" and "shipwreck" in display_name.lower():
                     qty = item.get('quantity', 0)
                     total_count += qty
-                    add_log("✅ Found FGW by Name: {0} (x{1})".format(display_name, qty))
-
+                    #add_log("✅ Found FGW by Name: {0} (x{1})".format(display_name, qty))
     return total_count > 0, total_count
 
 def dropps():
