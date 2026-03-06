@@ -10,7 +10,7 @@ import shutil
 import time
 
 pName = 'PosRotate'
-pVersion = '3.0.4'
+pVersion = '3.0.5'
 pUrl = 'https://raw.githubusercontent.com/nmilchev/xPosRotate/refs/heads/main/xPosRotate.py'
 NewestVersion = 0
 
@@ -116,13 +116,22 @@ cbPlayer = QtBind.createCheckBox(gui, "cbPlayer_clicked", "🔴 Player", 635, 24
 player_not = QtBind.createLineEdit(gui,"",632,260,88,20)
 
 def update_rotation(mode, index, ui_obj, checked):
+    data = get_character_data()
     loc_name = f"Location {index}"
+    
     if checked:
-        QtBind.setText(gui, ui_obj, f"🟢 {loc_name}")
+        filename = f"{data['name']}_{mode}_{loc_name.replace(' ','_')}.txt"
+        filepath = os.path.join(getPath(), filename)
+        if not os.path.exists(filepath):
+            add_log(f"⚠️ Save the position for {loc_name} first!")
+            QtBind.setChecked(gui, ui_obj, False)
+            QtBind.setText(gui, ui_obj, f"🔴 Inactive")
+            return
+        QtBind.setText(gui, ui_obj, f"🟢 Active  ")
         if loc_name not in rotation_data[mode]:
             rotation_data[mode].append(loc_name)
     else:
-        QtBind.setText(gui, ui_obj, f"🔴 {loc_name}")
+        QtBind.setText(gui, ui_obj, f"🔴 Inactive")
         if loc_name in rotation_data[mode]:
             rotation_data[mode].remove(loc_name)
     rotation_data[mode].sort() # Keeps Locations 1, 2, 3 in order
@@ -407,7 +416,7 @@ def btn_start_rotation():
         add_log("❌ No active locations selected.")
         return
     if not has_item:
-        add_log(f"🚫 Cannot Start: You have 0 {mode} Dimension Holes!")
+        add_log(f"❌ Cannot Start: You have 0 {mode} Dimension Holes!")
         return
     if mode_state[mode]["running"]:
         add_log("⚠ Rotation already running.")
@@ -443,9 +452,14 @@ def btn_stop_rotation():
 
 
 def start_training(location_name):
-    success = load_training_script(location_name)
-
-    if success:
+    mode = get_mode()
+    has_item, count = get_dimension_hole_count(mode)
+    
+    if not has_item:
+        add_log(f"⚠️ Missing {mode} Dimension Holes in inventory!❌")
+        return False
+        
+    if load_training_script(location_name):
         add_log(f"🟢 Bot started. Using {location_name}")
     else:
         add_log(f"🔴🔴🔴 Opps, Seems we cant can't start.")
